@@ -24,6 +24,9 @@ cd binbloom
 To build the latest version:
 
 ```console
+mkdir build
+cd build 
+cmake ..
 make
 ```
 
