@@ -190,5 +190,5 @@ Guillaume Heilles ([@PapaZours](https://twitter.com/PapaZours))
 
 ### License
 
-binbloom is provided under the [Apache 2.0 license](https://github.com/lief-project/LIEF/blob/0.10.1/LICENSE).
+binbloom is provided under the [Apache 2.0 license](https://github.com/quarkslab/binbloom/blob/master/LICENSE).
 
