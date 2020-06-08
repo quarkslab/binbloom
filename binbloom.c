@@ -1,0 +1,628 @@
+/* Copyright 2020 G. Heilles
+ * Copyright 2020 Quarkslab
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <malloc.h>
+#include <assert.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <math.h>
+
+#define CHUNK_SIZE 4096
+#define UDS_SIZE sizeof(UDS)
+#define CANDB_SIZE 512
+
+#define READ32LE(i) ((firmware[(i)+3]<<24)|(firmware[(i)+2]<<16)|(firmware[(i)+1]<<8)|(firmware[i]))
+#define READ32BE(i) ((firmware[i]<<24)|(firmware[(i)+1]<<16)|(firmware[(i)+2]<<8)|(firmware[(i)+3]))
+
+unsigned char *firmware;
+unsigned int *function_address;
+unsigned int *is_function;
+unsigned int size;
+unsigned int nb_functions;
+unsigned int main_segment;
+uint32_t *score_base_address;
+uint32_t g_loading_address = 0xFFFFFFFF;
+char filename[1024] = "";
+char func_name[1024] = "";
+char func_ptr_name[1024] = "";
+char ptr_name[1024] = "";
+
+int flag_compute_base_address = 0;
+int flag_compute_UDS_DB = 0;
+int flag_compute_endianness = 0;
+int flag_override_endianness = 0;
+int flag_override_bigendian = 0;
+int flag_override_littleendian = 0;
+int flag_verbose = 0;
+int threshold = 4;
+
+unsigned char UDS[] = {
+    0x10, 0x11, 0x27, 0x28, 0x3E, 0x83, 0x84, 0x85, 0x86, 0x87, 0x22, 0x23, 0x24, 0x2A, 0x2C, 0x2D, 0x2E, 0x3D, 0x14,
+    0x19, 0x2F, 0x31, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x18, 0x3B, 0x20, 0x21, 0x1A
+};
+
+unsigned char UDS_local[UDS_SIZE];
+unsigned int *score;
+int *refcount;
+int *popcount;
+int *segment;
+unsigned int nb_segments, shift;
+
+FILE *fp;
+FILE *fp2;
+
+typedef enum {
+    B_BIG_ENDIAN,
+    B_LITTLE_ENDIAN
+} t_endian;
+
+t_endian endianness = B_BIG_ENDIAN;
+
+int flag = 0;
+unsigned int base_address = 0;
+unsigned int end_address, mask_segment, mask_pointer;
+int offset = 0;
+
+uint32_t read32(uint32_t x) {
+    if (endianness == B_BIG_ENDIAN) {
+        return READ32BE(x);
+    } else {
+        return READ32LE(x);
+    }
+}
+
+uint32_t p2(uint32_t x) {
+    return 1 << (32 - __builtin_clz(x - 1));
+}
+
+unsigned int read_file(char *name, unsigned char **mem) {
+    int fd, nb;
+    struct stat buf;
+    unsigned char *ptr;
+
+    fd = open(name, O_RDONLY);
+    assert(fd != -1);
+    assert(0 == fstat(fd, &buf));
+    *mem = malloc(buf.st_size + 1024);
+    assert(mem != NULL);
+    ptr = *mem;
+    while ((nb = read(fd, ptr, CHUNK_SIZE)))
+        ptr += nb;
+    close(fd);
+
+    return buf.st_size;
+}
+
+int is_unique_UDS(unsigned int position) {
+    unsigned int j, flag;
+    flag = 0;
+    for (j = 0; j < UDS_SIZE; j++) {
+        if (firmware[position] == UDS[j]) {
+            flag = 1;
+        }
+    }
+
+    if (flag == 1) {
+        for (j = position - CANDB_SIZE / 2; j < position + CANDB_SIZE / 2; j++) {
+            if ((firmware[j] == firmware[position]) && (j != position))
+                flag = 0;
+        }
+    }
+    return flag;
+}
+
+void locate_can_db(void) {
+    unsigned int i, j, k, max_score, stride;
+    unsigned int candb_position = 0;
+    unsigned int *stride_score;
+
+    score = (unsigned int *)calloc(size, sizeof(int));
+    assert(score);
+    stride_score = (unsigned int *)calloc(size, sizeof(int));
+    assert(stride_score);
+
+    for (i = 1; i < size - CANDB_SIZE * 2; i++) {
+        for (stride = 6; stride <= 32; stride += 2) {
+            // prepare a local copy of the UDS service list, to remove them once each is found. This will ensure each UDS service is matched only once.
+            memcpy(UDS_local, UDS, UDS_SIZE);
+            max_score = 0;
+            for (k = 0; k < CANDB_SIZE; k += stride) {
+                int flag = 0;
+                for (j = 0; j < UDS_SIZE; j++) {
+                    // printf("j=%d, k=%d ", j, k);
+                    if ((firmware[i + k] == UDS_local[j]) && (UDS_local[j] != 0)) {
+                        //printf("at %#08x + %#08x, firmware=%#02x (j=%d, stride=%d)\n", i, k, firmware[i+k], j, stride);
+                        max_score++;
+                        UDS_local[j] = 0;
+                        flag = 1;
+                    }
+                }
+                if (flag == 0)
+                    break;
+            }
+            //  if (max_score) printf("Score at %#08x for stride %d: %d\n", i, stride, max_score);
+            if (max_score > score[i]) {
+                // printf("New high score for %#08x: %d\n", i, max_score);
+                score[i] = max_score;
+                stride_score[i] = stride;
+            }
+        }
+    }
+
+    // print 20 best candidates
+    for (j = 0; j < 20; j++) {
+        max_score = 0;
+        unsigned int max_stride = 0;
+        for (i = 0; i < size; i++) {
+            if (score[i] > max_score) {
+                max_score = score[i];
+                max_stride = stride_score[i];
+                candb_position = i;
+            }
+        }
+        printf("UDS DB position: %x with a score of %d and a stride of %d:\n", candb_position, max_score, max_stride);
+        for (unsigned int k = candb_position; k < candb_position + max_score * max_stride; k++) score[k] = 0; // skip all other references to this same candb
+        for (i = 0; i < max_score; i++) {
+            for (j = 0; j < max_stride; j++) {
+                printf("%02x ", firmware[candb_position + i * max_stride + j]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+        score[candb_position] = 0;
+    }
+    free(score);
+    free(stride_score);
+}
+
+int is_pointer(unsigned int base, unsigned int p) {
+    unsigned int lowp;
+    int res = 0;
+    if (p == 0) return 0;
+    if (p == 0xFFFFFFFF) return 0;
+    lowp = p & mask_pointer;
+    if (p >> shift == base) {
+        if (lowp < size) {
+            res = 1;
+        }
+    }
+    return res;
+}
+
+int count_array_elements(int base) {
+    int count = 0;
+    int total_count = 0;
+    int stride;
+    uint32_t last_pointer = 0;
+
+//    printf("Checking score for base %x, shift=%d, mask_pointer=%x\n", base, shift, mask_pointer);
+    for (stride = 4; stride < 16; stride += 2) {
+        for (unsigned int i = 0; i < size; i += 2) {
+            unsigned int p = read32(i);
+            unsigned int j = i;
+            count = 0;
+            while (is_pointer(base, p)) {
+//                printf("%x is pointer, count = %d\n", p, count);
+                if (p == last_pointer) break; // do not take into account arrays with constant values
+                count++;
+                j += stride;
+                if (j > size) break;
+                last_pointer = p;
+                p = read32(j);
+            }
+            last_pointer = 0;       // reset for the next search
+            if (count > 3) {        // take into account the tables of at least 4 consecutive pointers to the base address
+                total_count += count;
+            }
+        }
+    }
+
+    return total_count;
+}
+
+
+
+void save_pointers(unsigned int stride, unsigned int address) {
+    unsigned int i, j;
+
+    uint32_t loading_address;
+    unsigned int ptr, count, last_ptr, imax, stridemax, countmax = 0;
+    for (i = 0; i < nb_functions; i++) {
+        ptr = (read32(address)) & 0xFFFFFFFE;
+        loading_address = ptr - function_address[i];
+        //if (loading_address != g_loading_address) continue;
+//        printf("Ptr:%x, function(%d):%x, Loading address:%x\n", ptr, i, function_address[i], loading_address);
+        if (ptr < function_address[i]) continue;
+        count = 0;
+        ptr = (read32(address)) & 0xFFFFFFFE;
+        if ((ptr == 0) || (ptr == 0xFFFFFFFE)) continue;
+        do {
+            last_ptr = ptr;
+            ptr = (read32(address + stride * (count + 1))) & 0xFFFFFFFE;
+//            printf("Next (%d): %x\n", count, ptr);
+            count++;
+            if (ptr == 0) break;
+            if (ptr == 0xFFFFFFFE) break;
+        } while ((ptr != last_ptr) && (ptr - loading_address < size) && (is_function[ptr - loading_address] == 1));
+        if (count > countmax) {
+            countmax = count;
+            imax = i;
+            stridemax = stride;
+        }
+    }
+    if (countmax > 4) {
+        ptr = (read32(address)) & 0xFFFFFFFE;
+        loading_address = ptr - function_address[imax];
+        if (loading_address == g_loading_address) {
+            for (j = 0; j < countmax; j++) {
+                ptr = (read32(address + stridemax * j)) & 0xFFFFFFFE;
+                fprintf(fp2, "%08x\n", g_loading_address + address + stridemax * j);
+                fprintf(fp, "%08x\n", ptr);
+                //printf("At %08x, func ptr:%08x\n", address+stridemax*j, ptr);
+            }
+        }
+    }
+
+
+}
+
+int count_segments(void) {
+    unsigned int base;
+    int count = 0;
+    unsigned int i;
+    int max = 0;
+    for (base = 0; base < nb_segments; base++) {
+        memset(refcount, 0, size * sizeof(int));
+        for (i = 0; i < size - 4; i += 2) {
+            unsigned int p = 0;
+            unsigned int lowp;
+            p = read32(i);
+//            for (j = 0; j < 4; j++) {
+//                p = p << 8 | firmware[i + 3 - j];
+//            }
+            lowp = p & mask_pointer;
+            if (p >> shift == base) {
+                if (lowp < size) {
+                    refcount[lowp]++;   // increment the refcount of each pointer
+                }
+            }
+        }
+
+        // now we count the number of unique pointers (which refcount is != 0)
+        count = 0;
+        for (i = 0; i < size - 4; i += 2) {
+            if (refcount[i]) {
+                count++;
+            }
+        }
+        segment[base] = count;  // nb of unique pointers
+        if (count > max)
+            max = count;
+    }
+    return max;
+}
+
+void check_pointer(void) {
+    unsigned int base;
+    int max = 0;
+    int total_score_be = 0;
+    int total_score_le = 0;
+    int s;
+
+    printf("Determining the endianness\n");
+    /*
+       // This is a previous attempt, kept here for history in case you want to try it yourself.
+
+       // count all pointers to each segment, including all occurrences of the same pointer.
+       // scan the firmware
+       for (i=0; i<size-4; i+=2) {
+       unsigned int p = 0;
+       // read 4 bytes in the firmware -> in p
+       for (j = 0; j < 4; j++) {
+       p = p << 8 | firmware[i+3-j];
+       }
+       int s = p>>shift;    // compute the base address (segment) of the pointer
+       segment[s]++;                // increment its refcount
+       }
+     */
+    // the previous approach counts each occurrence of the same pointer. When a pointer is referenced several times, this is most probably
+    // NOT a pointer. Thus, in this version, we only count unique pointers.
+
+    endianness = B_BIG_ENDIAN;
+    printf("Computing heuristics in big endian order:\n");
+    max = count_segments();
+    for (base = 0; base < nb_segments; base++) {
+        if (segment[base] > max / threshold) {
+            s = count_array_elements(base);
+            printf("Base: %08x: unique pointers:%d, number of array elements:%d\n", base << shift, segment[base], s);
+            total_score_be += s;
+        }
+    }
+    printf("%d\n", total_score_be);
+    endianness = B_LITTLE_ENDIAN;
+    printf("Computing score in little endian order:\n");
+    max = count_segments();
+    for (base = 0; base < nb_segments; base++) {
+        if (segment[base] > max / threshold) {
+            s = count_array_elements(base);
+            printf("Base: %08x: unique pointers:%d, number of array elements:%d\n", base << shift, segment[base], s);
+            total_score_le += s;
+        }
+    }
+    printf("%d\n", total_score_le);
+
+    if (total_score_le > total_score_be) {
+        endianness = B_LITTLE_ENDIAN;
+        printf("This firmware seems to be LITTLE ENDIAN\n");
+    } else {
+        endianness = B_BIG_ENDIAN;
+        printf("This firmware seems to be BIG ENDIAN\n");
+    }
+
+}
+
+void count_pointers(unsigned int stride, unsigned int address) {
+    unsigned int i;
+    uint32_t loading_address;
+    unsigned int ptr, count, last_ptr, imax, countmax = 0;
+    for (i = 0; i < nb_functions; i++) {
+        ptr = (read32(address)) & 0xFFFFFFFE;
+        if (ptr == 0) break;
+        if (ptr == 0xFFFFFFFE) break;
+        loading_address = ptr - function_address[i];
+//        printf("At %08x, Ptr:%x, function(%d):%08x, Loading address:%08x\n", address, ptr, i, function_address[i], loading_address);
+        if (ptr < function_address[i]) continue;
+        count = 0;
+        ptr = (read32(address)) & 0xFFFFFFFE;
+        if ((ptr == 0) || (ptr == 0xFFFFFFFE)) continue;
+        do {
+            last_ptr = ptr;
+            ptr = (read32(address + stride * (count + 1))) & 0xFFFFFFFE;
+//            printf("Next (%d): %x\n", count, ptr);
+            count++;
+            if (ptr == 0) break;
+            if (ptr == 0xFFFFFFFE) break;
+        } while ((ptr != last_ptr) && (ptr - loading_address < size) && (is_function[ptr - loading_address] == 1));
+        if (count > countmax) {
+            countmax = count;
+            imax = i;
+        }
+    }
+    if (countmax > 4) {
+        ptr = (read32(address)) & 0xFFFFFFFE;
+        loading_address = ptr - function_address[imax];
+        score_base_address[loading_address >> 2]++;
+    }
+}
+
+void get_pointer_array(void) {
+    if (g_loading_address == 0xFFFFFFFF) {
+        for (int s = 4; s <= 16; s += 2) {
+            //printf("Scanning with stride %d\n", s);
+            for (unsigned int i = 0; i < size; i += 2) {
+                count_pointers(s, i);
+            }
+        }
+        unsigned long k;
+        unsigned int max_score_base_address = 0;
+        unsigned int max_base_address = 0;
+        for (k = 0; k < (0x0FFFFFFFF >> 2); k++) {
+            if (score_base_address[k] > max_score_base_address) {
+                max_score_base_address = score_base_address[k];
+                max_base_address = k << 2;
+            }
+        }
+        g_loading_address = max_base_address;
+        printf("Highest score for base address: %d, for base address %08x\n", max_score_base_address, max_base_address);
+        printf("For information, here are the best scores:\n");
+        for (k = 0; k < (0x0FFFFFFFF >> 2); k++) {
+            if (score_base_address[k] > max_score_base_address / 2) {
+                printf("For base address %08x, found %d functions\n", (unsigned int)(k << 2), score_base_address[k]);
+            }
+        }
+    }
+    strcpy(func_ptr_name, filename);
+    strcat(func_ptr_name, ".fad");
+    strcpy(ptr_name, filename);
+    strcat(ptr_name, ".fpt");
+    fp = fopen(func_ptr_name, "w");
+    assert(fp);
+    fp2 = fopen(ptr_name, "w");
+    assert(fp2);
+
+    printf("Saving function pointers for this base address...\n");
+    for (int s = 4; s <= 16; s += 2) {
+        //printf("Scanning with stride %d\n", s);
+        for (unsigned int i = 0; i < size; i += 2) {
+            save_pointers(s, i);
+        }
+    }
+    printf("Done.\n");
+    fclose(fp);
+    fclose(fp2);
+}
+
+void load_functions(void) {
+
+    strcpy(func_name, filename);
+    strcat(func_name, ".fun");
+
+    FILE *fp = fopen(func_name, "r");
+    if (!fp) {
+        printf("functions file is missing.\n");
+        exit(-1);
+    }
+
+    unsigned int address;
+    int ret, i = 0;
+
+    ret = fscanf(fp, "%x", &address);
+    while (ret == 1) {
+        if (address > size) {
+            printf("The functions file has not been generated with a 0 base address. You should do that.\n");
+            printf("i:%d, address:%08x, size: %08x\n", i, address, size);
+            exit(-1);
+        }
+//        printf("loaded %x\n", address);
+        is_function[address] = 1;
+        function_address[i] = address;
+        if ((i > 1) && (function_address[i] - function_address[i - 1] <= 8)) { // skip short functions (<=8 bytes)
+            function_address[i - 1] = function_address[i];
+            i--;
+        }
+        /*        if ((i>2)&&(function_address[i] - function_address[i-1] == function_address[i-1] - function_address[i-2])) { // skip constant length functions (to avoid false positives with arrays of data)
+                    function_address[i-1] = function_address[i];
+                    i--;
+                }
+        */
+        ret = fscanf(fp, "%x", &address);
+        i++;
+    }
+    nb_functions = i;
+    fclose(fp);
+    printf("loaded %d functions\n", nb_functions);
+}
+
+void usage(char *progname) {
+    printf("Usage: %s -f firmware.bin [-b] [-B base_address] [-e] [-E b] [-E l] [-u]\n", progname);
+    printf("\t -f firmware.bin: firmware to analyse\n");
+    printf("\t -b: compute the base address (need a list of functions in a \"functions\" file, in hex. See README.txt for instructions\n");
+    printf("\t -e: compute the endianness\n");
+    printf("\t -E: override the endianness computation. -E b for big endian, -E l for little endian\n");
+    printf("\t -v: display more results while computing the endianness\n");
+    printf("\t -u: search the UDS database\n");
+    printf("\t -B 0xaaaaaaaaaa: override the base address. To be used with -b\n");
+    exit(-1);
+}
+
+int main(int argc, char **argv) {
+    int c;
+
+    if (argc == 1) {
+        usage(argv[0]);
+    }
+
+    while ((c = getopt(argc, argv, "hf:bB:euvE:")) != -1)
+        switch (c) {
+            case 'h':
+                usage(argv[0]);
+                break;
+            case 'f':
+                strcpy(filename, optarg);
+                size = read_file(filename, &firmware);
+                break;
+            case 'b':
+                flag_compute_base_address = 1;
+                break;
+            case 'v':
+                flag_verbose = 1;
+                break;
+            case 'u':
+                flag_compute_UDS_DB = 1;
+                break;
+            case 'e':
+                flag_compute_endianness = 1;
+                break;
+            case 'E':
+                flag_override_endianness = 1;
+                if (optarg[0] == 'b') flag_override_bigendian = 1;
+                if (optarg[0] == 'l') flag_override_littleendian = 1;
+                break;
+            case 'B':
+                if (1 != sscanf(optarg, "%x", &g_loading_address)) {
+                    printf("Can not read the loading address. It should be in hex : -B 0x1234\n");
+                    exit(-1);
+                } else {
+                    printf("Overriding the loading address: %08x\n", g_loading_address);
+                }
+                break;
+            default:
+                abort();
+        }
+
+
+
+    mask_segment = ~(p2(size) - 1);
+    mask_pointer = p2(size) - 1;
+    nb_segments = mask_segment;
+    while ((nb_segments & 1) == 0)
+        nb_segments = nb_segments >> 1;
+    nb_segments++;
+    shift = __builtin_clz(nb_segments - 1);
+    printf("Loaded %s, size:%d, bit:%08x, %08x, nb_segments:%d, shift:%d\n", filename, size, mask_segment, mask_pointer,
+           nb_segments, shift);
+
+    refcount = (int *)calloc(size, sizeof(int));
+    assert(refcount);
+    popcount = (int *)calloc(nb_segments, sizeof(int));
+    assert(popcount);
+
+    segment = (int *)calloc(nb_segments, sizeof(int));
+    assert(segment);
+
+    is_function = (unsigned int *)calloc(size, sizeof(int));
+    assert(is_function);
+
+    function_address = (unsigned int *)calloc(size, sizeof(int));
+    assert(function_address);
+
+    score_base_address = (uint32_t *)calloc(1024 * 1024 * 1024 - 1, sizeof(uint32_t));
+    assert(score_base_address);
+
+    end_address = base_address + size;
+    printf("End address:%08x\n", end_address);
+
+    if (flag_verbose == 1) {
+        threshold = 10;
+    }
+    // can not compute the base address without finding out the endianness.
+    // Force computation of the endianness if needed
+    if ((flag_compute_base_address == 1) && (flag_compute_endianness == 0))
+        flag_compute_endianness = 1;
+
+    if (flag_compute_endianness == 1) {
+        if (flag_override_endianness == 1) {
+            if (flag_override_bigendian == 1) endianness = B_BIG_ENDIAN;
+            if (flag_override_littleendian == 1) endianness = B_LITTLE_ENDIAN;
+        } else {
+            check_pointer();
+        }
+    }
+
+    if (flag_compute_UDS_DB == 1) {
+        locate_can_db();
+    }
+
+    if (flag_compute_base_address == 1) {
+        load_functions();
+        get_pointer_array();
+    }
+
+    free(firmware);
+    free(refcount);
+    free(popcount);
+    free(segment);
+    free(score_base_address);
+
+    return 0;
+
+}
