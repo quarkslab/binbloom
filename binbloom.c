@@ -33,18 +33,36 @@
 #define READ32LE(i) ((firmware[(i)+3]<<24)|(firmware[(i)+2]<<16)|(firmware[(i)+1]<<8)|(firmware[i]))
 #define READ32BE(i) ((firmware[i]<<24)|(firmware[(i)+1]<<16)|(firmware[(i)+2]<<8)|(firmware[(i)+3]))
 
+typedef struct {
+    uint32_t la;
+    uint32_t fptr;
+    uint32_t ptr;
+} fptr_t;
+
+typedef struct {
+    uint32_t la;
+    uint32_t score;
+} score_t;
+
 unsigned char *firmware;
 unsigned int *function_address;
 unsigned int *is_function;
 unsigned int size;
 unsigned int nb_functions;
 unsigned int main_segment;
-uint32_t *score_base_address;
+score_t *score_base_address;
 uint32_t g_loading_address = 0xFFFFFFFF;
 char filename[1024] = "";
 char func_name[1024] = "";
 char func_ptr_name[1024] = "";
 char ptr_name[1024] = "";
+fptr_t * funcptrs;
+unsigned int funcptrs_size;
+unsigned int funcptrs_index = 0;
+unsigned int score_base_address_index = 0;
+unsigned int score_base_address_size;
+unsigned int max_score_la = 0;
+unsigned int max_score_base_address = 0;
 
 int flag_compute_base_address = 0;
 int flag_compute_UDS_DB = 0;
@@ -243,51 +261,6 @@ int count_array_elements(int base) {
 }
 
 
-
-void save_pointers(unsigned int stride, unsigned int address) {
-    unsigned int i, j;
-
-    uint32_t loading_address;
-    unsigned int ptr, count, last_ptr, imax, stridemax, countmax = 0;
-    for (i = 0; i < nb_functions; i++) {
-        ptr = (read32(address)) & 0xFFFFFFFE;
-        loading_address = ptr - function_address[i];
-        //if (loading_address != g_loading_address) continue;
-//        printf("Ptr:%x, function(%d):%x, Loading address:%x\n", ptr, i, function_address[i], loading_address);
-        if (ptr < function_address[i]) continue;
-        count = 0;
-        ptr = (read32(address)) & 0xFFFFFFFE;
-        if ((ptr == 0) || (ptr == 0xFFFFFFFE)) continue;
-        do {
-            last_ptr = ptr;
-            ptr = (read32(address + stride * (count + 1))) & 0xFFFFFFFE;
-//            printf("Next (%d): %x\n", count, ptr);
-            count++;
-            if (ptr == 0) break;
-            if (ptr == 0xFFFFFFFE) break;
-        } while ((ptr != last_ptr) && (ptr - loading_address < size) && (is_function[ptr - loading_address] == 1));
-        if (count > countmax) {
-            countmax = count;
-            imax = i;
-            stridemax = stride;
-        }
-    }
-    if (countmax > 4) {
-        ptr = (read32(address)) & 0xFFFFFFFE;
-        loading_address = ptr - function_address[imax];
-        if (loading_address == g_loading_address) {
-            for (j = 0; j < countmax; j++) {
-                ptr = (read32(address + stridemax * j)) & 0xFFFFFFFE;
-                fprintf(fp2, "%08x\n", g_loading_address + address + stridemax * j);
-                fprintf(fp, "%08x\n", ptr);
-                //printf("At %08x, func ptr:%08x\n", address+stridemax*j, ptr);
-            }
-        }
-    }
-
-
-}
-
 int count_segments(void) {
     unsigned int base;
     int count = 0;
@@ -299,9 +272,6 @@ int count_segments(void) {
             unsigned int p = 0;
             unsigned int lowp;
             p = read32(i);
-//            for (j = 0; j < 4; j++) {
-//                p = p << 8 | firmware[i + 3 - j];
-//            }
             lowp = p & mask_pointer;
             if (p >> shift == base) {
                 if (lowp < size) {
@@ -383,6 +353,15 @@ void check_pointer(void) {
 
 }
 
+int find_score_base_address(uint32_t la) {
+    for (unsigned int i=0; i<score_base_address_index; i++) {
+        if (score_base_address[i].la == la) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 void count_pointers(unsigned int stride, unsigned int address) {
     unsigned int i;
     uint32_t loading_address;
@@ -413,11 +392,42 @@ void count_pointers(unsigned int stride, unsigned int address) {
     if (countmax > 4) {
         ptr = (read32(address)) & 0xFFFFFFFE;
         loading_address = ptr - function_address[imax];
-        score_base_address[loading_address >> 2]++;
+        int j = find_score_base_address(loading_address);
+        if (j == -1) {
+            score_base_address[score_base_address_index].la = loading_address;
+            score_base_address[score_base_address_index].score = 1;
+            score_base_address_index++;
+            if (score_base_address_index == score_base_address_size) {
+                score_base_address_size *= 2;
+                score_base_address = realloc(score_base_address, score_base_address_size);
+            }
+        } else {
+            score_base_address[j].score++;
+            if (score_base_address[j].score > max_score_base_address) {
+                max_score_base_address = score_base_address[j].score;
+                max_score_la = loading_address;
+            }
+        }
+
+        // store all function pointers in the array for this loading address
+        count = 0;
+        do {
+            funcptrs[funcptrs_index].la = loading_address;
+            funcptrs[funcptrs_index].fptr = ptr;
+            funcptrs[funcptrs_index].ptr = address + stride * count;
+            funcptrs_index++;
+            if (funcptrs_index > funcptrs_size) {
+                funcptrs_size *= 2;
+                funcptrs = realloc(funcptrs, funcptrs_size);
+            }
+            ptr = (read32(address + stride * (count + 1))) & 0xFFFFFFFE;
+            count++;
+        } while (count != countmax);
     }
 }
 
 void get_pointer_array(void) {
+    unsigned long k;
     if (g_loading_address == 0xFFFFFFFF) {
         for (int s = 4; s <= 16; s += 2) {
             //printf("Scanning with stride %d\n", s);
@@ -425,23 +435,16 @@ void get_pointer_array(void) {
                 count_pointers(s, i);
             }
         }
-        unsigned long k;
-        unsigned int max_score_base_address = 0;
-        unsigned int max_base_address = 0;
-        for (k = 0; k < (0x0FFFFFFFF >> 2); k++) {
-            if (score_base_address[k] > max_score_base_address) {
-                max_score_base_address = score_base_address[k];
-                max_base_address = k << 2;
+        // display the loading addresses which score is above a threshold
+        printf("Best scores for the loading address:\n");
+        for (k=0; k<score_base_address_index; k++) {
+            if (score_base_address[k].score > max_score_base_address/2) {
+                printf("Base address:%08x, score:%d\n", score_base_address[k].la, score_base_address[k].score);
             }
         }
-        g_loading_address = max_base_address;
-        printf("Highest score for base address: %d, for base address %08x\n", max_score_base_address, max_base_address);
-        printf("For information, here are the best scores:\n");
-        for (k = 0; k < (0x0FFFFFFFF >> 2); k++) {
-            if (score_base_address[k] > max_score_base_address / 2) {
-                printf("For base address %08x, found %d functions\n", (unsigned int)(k << 2), score_base_address[k]);
-            }
-        }
+
+        g_loading_address = max_score_la;
+        printf("\nBest loading address: %08x\n", g_loading_address);
     }
     strcpy(func_ptr_name, filename);
     strcat(func_ptr_name, ".fad");
@@ -453,12 +456,13 @@ void get_pointer_array(void) {
     assert(fp2);
 
     printf("Saving function pointers for this base address...\n");
-    for (int s = 4; s <= 16; s += 2) {
-        //printf("Scanning with stride %d\n", s);
-        for (unsigned int i = 0; i < size; i += 2) {
-            save_pointers(s, i);
+    for(k=0; k<funcptrs_index; k++) {
+        if (funcptrs[k].la == g_loading_address) {
+            fprintf(fp, "%08x\n", funcptrs[k].fptr);
+            fprintf(fp2, "%08x\n", g_loading_address + funcptrs[k].ptr);
         }
     }
+
     printf("Done.\n");
     fclose(fp);
     fclose(fp2);
@@ -588,8 +592,12 @@ int main(int argc, char **argv) {
     function_address = (unsigned int *)calloc(size, sizeof(int));
     assert(function_address);
 
-    score_base_address = (uint32_t *)calloc(1024 * 1024 * 1024 - 1, sizeof(uint32_t));
+    score_base_address_size = size;
+    score_base_address = (score_t *)calloc(score_base_address_size, sizeof(score_t));
     assert(score_base_address);
+
+    funcptrs = (fptr_t *)calloc(size, sizeof(fptr_t *));
+    funcptrs_size = size;
 
     end_address = base_address + size;
     printf("End address:%08x\n", end_address);
