@@ -56,7 +56,7 @@ char filename[1024] = "";
 char func_name[1024] = "";
 char func_ptr_name[1024] = "";
 char ptr_name[1024] = "";
-fptr_t * funcptrs;
+fptr_t *funcptrs;
 unsigned int funcptrs_size;
 unsigned int funcptrs_index = 0;
 unsigned int score_base_address_index = 0;
@@ -354,7 +354,7 @@ void check_pointer(void) {
 }
 
 int find_score_base_address(uint32_t la) {
-    for (unsigned int i=0; i<score_base_address_index; i++) {
+    for (unsigned int i = 0; i < score_base_address_index; i++) {
         if (score_base_address[i].la == la) {
             return i;
         }
@@ -437,8 +437,8 @@ void get_pointer_array(void) {
         }
         // display the loading addresses which score is above a threshold
         printf("Best scores for the loading address:\n");
-        for (k=0; k<score_base_address_index; k++) {
-            if (score_base_address[k].score > max_score_base_address/2) {
+        for (k = 0; k < score_base_address_index; k++) {
+            if (score_base_address[k].score > max_score_base_address / 2) {
                 printf("Base address:%08x, score:%d\n", score_base_address[k].la, score_base_address[k].score);
             }
         }
@@ -456,7 +456,7 @@ void get_pointer_array(void) {
     assert(fp2);
 
     printf("Saving function pointers for this base address...\n");
-    for(k=0; k<funcptrs_index; k++) {
+    for (k = 0; k < funcptrs_index; k++) {
         if (funcptrs[k].la == g_loading_address) {
             fprintf(fp, "%08x\n", funcptrs[k].fptr);
             fprintf(fp2, "%08x\n", g_loading_address + funcptrs[k].ptr);
