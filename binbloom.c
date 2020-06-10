@@ -343,12 +343,14 @@ void check_pointer(void) {
     }
     printf("%d\n", total_score_le);
 
-    if (total_score_le > total_score_be) {
+    if (total_score_le > total_score_be + total_score_be / 2) {
         endianness = B_LITTLE_ENDIAN;
         printf("This firmware seems to be LITTLE ENDIAN\n");
-    } else {
+    } else if (total_score_be > total_score_le + total_score_le / 2) {
         endianness = B_BIG_ENDIAN;
         printf("This firmware seems to be BIG ENDIAN\n");
+    } else {
+        printf("Scores for Big endian and Little endian are too close to determine the endianness.\n");
     }
 
 }
