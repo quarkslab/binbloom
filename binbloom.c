@@ -118,7 +118,10 @@ unsigned int read_file(char *name, unsigned char **mem) {
     unsigned char *ptr;
 
     fd = open(name, O_RDONLY);
-    assert(fd != -1);
+    if (fd == -1) {
+        printf("Can not open input file %s\n", name);
+        exit(-1);
+    }
     assert(0 == fstat(fd, &buf));
     *mem = malloc(buf.st_size + 1024);
     assert(mem != NULL);
@@ -565,7 +568,9 @@ int main(int argc, char **argv) {
                 }
                 break;
             default:
-                abort();
+                printf("Invalid argument.\n\n");
+                usage(argv[0]);
+                exit(1);
         }
 
 
