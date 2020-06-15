@@ -373,14 +373,12 @@ void count_pointers(unsigned int stride, unsigned int address) {
     unsigned int ptr, count, last_ptr, imax, countmax = 0;
     for (i = 0; i < nb_functions; i++) {
         ptr = (read32(address)) & 0xFFFFFFFE;
-        if (ptr == 0) break;
-        if (ptr == 0xFFFFFFFE) break;
+        if (ptr == 0) return;
+        if (ptr == 0xFFFFFFFE) return;
         loading_address = ptr - function_address[i];
 //        printf("At %08x, Ptr:%x, function(%d):%08x, Loading address:%08x\n", address, ptr, i, function_address[i], loading_address);
         if (ptr < function_address[i]) continue;
         count = 0;
-        ptr = (read32(address)) & 0xFFFFFFFE;
-        if ((ptr == 0) || (ptr == 0xFFFFFFFE)) continue;
         do {
             last_ptr = ptr;
             ptr = (read32(address + stride * (count + 1))) & 0xFFFFFFFE;
