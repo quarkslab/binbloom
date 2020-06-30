@@ -513,14 +513,23 @@ void load_functions(void) {
 }
 
 void usage(char *progname) {
-    printf("Usage: %s -f firmware.bin [-b] [-B base_address] [-e] [-E b] [-E l] [-u]\n", progname);
-    printf("\t -f firmware.bin: firmware to analyse\n");
-    printf("\t -b: compute the base address (need a list of functions in a \"functions\" file, in hex. See README.txt for instructions\n");
-    printf("\t -e: compute the endianness\n");
-    printf("\t -E: override the endianness computation. -E b for big endian, -E l for little endian\n");
-    printf("\t -v: display more results while computing the endianness\n");
-    printf("\t -u: search the UDS database\n");
-    printf("\t -B 0xaaaaaaaaaa: override the base address. To be used with -b\n");
+    printf(
+        "Usage: %s -f firmware.bin [-b] [-B base_address] [-e] [-E <b|l>] [-u] [-v]\n"
+        "         -f firmware.bin    firmware to analyse (mandatory)\n"
+        "         -u                 search a UDS database\n"
+        "         -e                 infer the endianness\n"
+        "         -E                 override the endianness computation. -E b for big endian, -E l for little endian\n"
+        "         -b                 infer the base address (need a list of functions in a \"functions\" file, in hex. See README.txt for instructions)\n"
+        "         -B 0xaaaaaaaa      override the base address. To be used with -b\n"
+        "         -v                 verbose: display more results\n"
+        "\n\nExamples:\n"
+        "    binbloom -f firmware.bin -u : compute the address of the UDS database\n"
+        "    binbloom -f firmware.bin -e : compute the endianness\n"
+        "    binbloom -f firmware.bin -b : compute the base address, computes the endianness first\n"
+        "    binbloom -f firmware.bin -b -E <b|l> : compute the base address and specify the endianness, in case the automatic detection of the endianness is wrong, then write the .fad and .fpt files\n"
+        "    binbloom -f firmware.bin -B <base_address> [-E <b|l>] : write the .fad and .fpt files. Overrire the computation of the base address, and of the endianness if -E is specified\n"
+    , progname);
+
     exit(-1);
 }
 
