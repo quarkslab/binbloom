@@ -1371,12 +1371,12 @@ void compute_candidates(
                     printf(" More base addresses to consider (just in case):\n");
                     for (i=0; i<((g_bm_kept>30)?30:g_bm_kept); i++)
                     {
-                        if (p_scores[i].base_address != max_address)
+                        if ((p_scores[i].base_address != max_address) && (p_scores[i].score > 0))
                         {
                             if (g_target_arch == ARCH_64)
-                                printf("  0x%016lx (%d)\n", p_scores[i].base_address, p_scores[i].score/nb_candidates);
+                                printf("  0x%016lx (%f)\n", p_scores[i].base_address, (float)p_scores[i].score/p_scores[0].score);
                             else
-                                printf("  0x%08x (%d)\n", (uint32_t)p_scores[i].base_address, p_scores[i].score/nb_candidates);
+                                printf("  0x%08x (%.02f)\n", (uint32_t)p_scores[i].base_address, (float)p_scores[i].score/p_scores[0].score);
                         }
                     }
                 }
