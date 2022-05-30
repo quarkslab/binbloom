@@ -133,9 +133,6 @@ struct {
 This analysis is based on heuristics so it can give false positives. You have to read the list of potential UDS databases found by binbloom and check and see which one is the correct one, if any. Binbloom provides the identified structure in its output, allowing some disassemblers
 to parse the memory following the structure declaration.
 
-## 
-
-
 ## About
 
 ### Authors
