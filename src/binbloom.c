@@ -109,7 +109,10 @@ void index_poi_strings(poi_t *p_poi_list, unsigned int ui_min_size)
 
     while (cursor < g_content_size)
     {
-        progress_bar(cursor, g_content_size, "Indexing strings ...");
+        if (cursor % (g_content_size/1000) == 0)
+        {
+            progress_bar(cursor, g_content_size, "Indexing strings ...");
+        }
         if (!is_in_str)
         {
             if (isprint(gp_content[cursor]))
@@ -827,7 +830,10 @@ void index_poi(poi_t *p_poi_list, int include_strings)
 
     while (cursor < g_content_size-get_arch_pointer_size(g_target_arch))
     {
-        progress_bar(cursor, g_content_size-get_arch_pointer_size(g_target_arch), "Searching for PoIs...");
+        if (cursor % (g_content_size/1000) == 0)
+        {
+            progress_bar(cursor, g_content_size-get_arch_pointer_size(g_target_arch), "Searching for PoIs...");
+        }
         value = read_pointer(g_target_arch, g_target_endian, gp_content, cursor);
 
         if (!is_in_ary)
@@ -1431,7 +1437,10 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
     p_candidates_be = addrtree_node_alloc();
     for (i=0; i<g_content_size - get_arch_pointer_size(g_target_arch); i++)
     {
-        progress_bar(i, (g_content_size - get_arch_pointer_size(g_target_arch)), "Guessing endianness ...");
+        if (i % (g_content_size/100) == 0)
+        {
+            progress_bar(i, (g_content_size - get_arch_pointer_size(g_target_arch)), "Guessing endianness ...");
+        }
         /* Read LE and BE address from firmware at offset i. */
         address = read_pointer(g_target_arch, ENDIAN_LE, gp_content, i);
         address_be = read_pointer(g_target_arch, ENDIAN_BE, gp_content, i);
