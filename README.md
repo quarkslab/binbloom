@@ -137,8 +137,8 @@ to parse the memory following the structure declaration.
 
 ### Authors
 
-Guillaume Heilles ([@PapaZours](https://twitter.com/PapaZours))
-Damien Cauquil ([@virtualabs](https://twitter.com/virtualabs))
+* Guillaume Heilles ([@PapaZours](https://twitter.com/PapaZours))
+* Damien Cauquil ([@virtualabs](https://twitter.com/virtualabs))
 
 ### License
 
