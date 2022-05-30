@@ -22,6 +22,7 @@ cd binbloom
 To build the latest version (linux only):
 
 ```console
+autoreconf -i
 ./configure
 make
 sudo make install
