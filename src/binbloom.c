@@ -1853,7 +1853,7 @@ void print_usage(char *program_name)
     printf("Examples:\n\n");
     printf("- Find the endianness and possible base address for an unknown 32-bit architecture firmware:\n");
     printf("\t%s -a 32 test_firmware.bin\n\n", program_name);
-    printf("- Find the base address knowing the endiannes:\n");
+    printf("- Find the base address knowing the endianness:\n");
     printf("\t%s -a 32 -e le test_firmware.bin\n\n", program_name);
     printf("- Find possible UDS database knowing the base address:\n");
     printf("\t%s -a 32 -e le -b 0x1000 test_firmware.bin\n", program_name);
