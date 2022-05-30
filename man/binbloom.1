@@ -1,0 +1,94 @@
+.\" Manpage for binbloom
+.\" Contact dcauquil@quarkslab.com to correct errors or typos.
+.TH BINBLOOM "15 Sep 2021" "2.0" "binbloom man page"
+.SH NAME
+binbloom \- Find firmware loading address and UDS database (if any)
+
+.SH SYNOPSIS
+
+.SY binbloom
+.OP -a arch
+.OP -b address
+.OP -d
+.OP -e endianness
+.OP -f functions-file
+.OP -t threads
+.OP -v
+.YS
+
+.SH DESCRIPTION
+
+\fBbinbloom\fP can determine an unknown binary firmware \fRloading address\fP (or base address) from
+its content based on heuristics and the target architecture characteristics (i.e.
+32-bit/64-bit and endianness). If the endianness is unknown, \fBbinbloom\fP
+will try to determine it.
+
+\fBbinbloom\fP is also able to locate any Unified Diagnostic Services (UDS) database
+generally used in automotive firmwares, once the loading address has been found.
+
+.SS OPTIONS
+
+.TP
+\fB-a\fP \fIarch\fP, \fB--arch=\fP\fIarch\fP
+Specify target architecture, must be 32 (for 32-bit architecture) or 64 (for 64-bit architecture).
+
+.TP
+\fB-b\fP \fIaddress\fP, \fB--base=\fP\fIaddress\fP
+Specify the base address (or loading address) to use. Use this option to enable UDS database
+search.
+
+.TP
+\fB-e\fP \fIendianness\fP, \fB--endian=\fP\fIendianness\fP
+Specify target endianness,  must be \fIle\fP for little-endian or \fIbe\fP for big-endian.
+
+.TP
+\fB-d\fP, \fB--deep\fP
+Enable \fBdeep search\fP. This search mode will consider each potential loading/base address
+without applying a first heuristic filter used in normal mode. This type
+of search takes longer to complete and requires much more computing power, it is also
+recommended to use multiple threads (through the \fB-t\fP,\fB--threads\fP option) to speed
+up the search.
+
+.TP
+\fB-f\fP, \fB--functions\fP
+Specify an external file containing known function addresses in hex (one per line) that
+will be used by \fBbinbloom\fP in its base address guessing algorithm. Providing
+such a file may help finding the correct base address, depending on the architecture.
+
+.TP
+\fB-t\fP, \fB--threads\fP
+Specify a number of threads to use when searching for the base address. It is recommended
+to set this value to the number of cores minus 1 in order to get the best performances.
+
+.TP
+.B-v.P, \fB--verbose\fP
+Enable verbose mode, \fBbinbloom\fP will display more information. Use this option
+many times to get more information displayed.
+
+.SH EXAMPLES
+
+Here are some examples showing how to use binbloom in different cases. 
+
+\fBbinbloom -a 32 firmware.bin\fP
+
+\fIBinbloom\fP will analyze \fIfirmware.bin\fP considering a 32-bit architecture. \fIBinbloom\fP
+will guess the endianness and then find out one or more possible base addresses.
+
+\fBbinbloom -a 32 -e le firmware.bin\fP
+
+Same as above, but in this example the endianness is set to \fIlittle-endian\fP.
+
+\fBbinbloom -a 32 -e le -d -t 4 firmware.bin\fP
+
+\fIBinbloom\fP will perform a deep search considering a 32-bit little-endian architecture,
+and will use 4 threads to speed up this process. 
+
+\fBbinbloom -a 64 -f ./function.list firmware.bin\fP
+
+\fIBinbloom\fP will parse \fIfirmware.bin\fP to find points of interest but also
+use the provided file \fIfunctions.list\fP to guess the base address. 
+
+.SH BUGS
+No known bugs.
+.SH AUTHORS
+Guillaume Heires, Damien Cauquil
