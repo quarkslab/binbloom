@@ -16,5 +16,5 @@ int get_arch_pointer_size(arch_t arch);
 uint64_t read_pointer(arch_t arch, endianness_t endian, unsigned char *p_content, unsigned int offset);
 double entropy(unsigned char *p_data, int size);
 
-void progress_bar(int current, int max, char *desc);
+void progress_bar(uint64_t current, uint64_t max, char *desc);
 void progress_bar_done(void);

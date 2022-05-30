@@ -160,9 +160,9 @@ double entropy(unsigned char *p_data, int size)
  * @param   desc        Description string
  **/
 
-void progress_bar(int current, int max, char *desc)
+void progress_bar(uint64_t current, uint64_t max, char *desc)
 {
-    int percent, curpos, i;
+    uint64_t percent, curpos, i;
     struct winsize w;
 
     /* Get terminal size. */
