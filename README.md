@@ -134,6 +134,19 @@ struct {
 This analysis is based on heuristics so it can give false positives. You have to read the list of potential UDS databases found by binbloom and check and see which one is the correct one, if any. Binbloom provides the identified structure in its output, allowing some disassemblers
 to parse the memory following the structure declaration.
 
+## Advanced options
+
+You can speed up the base address lookup process by enabling multi-threading with the `-t` option. By default, a single thread is used.
+
+```console
+binbloom -t 8 firmware.bin
+```
+
+A *deep search mode* is also implemented but is still experimental. This mode may be useful in very rare occasions as it may
+find a valid base address when nothing else works, but it is a slower mode that may take some time to complete.
+
+If you want the tool to display more information, use one or more `-v` options.
+
 ## About
 
 ### Authors
