@@ -494,7 +494,7 @@ void index_poi_structure_arrays(poi_t *p_struct_list, poi_t *p_pointers_list, po
                     /* Compute next pointer offset. */
                     cursor = poi->offset + count*(nb_members*get_arch_pointer_size(g_target_arch));
 
-                    /* If next offset is in our dump, count consecutives matches. */
+                    /* If next offset is in our dump, count consecutive matches. */
                     if (cursor < (g_content_size - get_arch_pointer_size(g_target_arch)))
                     {
                         found = 0;
@@ -1848,7 +1848,7 @@ void find_coherent_data(char *psz_filename, uint64_t u64_base_address)
 
 void print_usage(char *program_name)
 {
-    printf("Quarkslab's Binbloom - Raw firmware analyzis tool\n\n");
+    printf("Quarkslab's Binbloom - Raw firmware analysis tool\n\n");
     printf("Binbloom searches for endianness, base addresses and UDS structures from raw firmware files.\n\n");
     printf(" Usage: %s [options] firmware_file\n", program_name);
     printf("\t-a (--arch)\t\tSpecify target architecture, must be 32 or 64 (default: 64).\n");
