@@ -142,7 +142,7 @@ You can speed up the base address lookup process by enabling multi-threading wit
 binbloom -t 8 firmware.bin
 ```
 
-A *deep search mode* is also implemented but is still experimental. This mode may be useful in very rare occasions as it may
+A *deep search mode*, enable with the `-d` option, is also implemented but is still experimental. This mode may be useful in very rare occasions as it may
 find a valid base address when nothing else works, but it is a slower mode that may take some time to complete.
 
 If you want the tool to display more information, use one or more `-v` options.
