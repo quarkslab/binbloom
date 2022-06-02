@@ -1467,6 +1467,9 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
     /*
       If arch is ARCH_32, addresses are stored on the last 4 bytes, so we need
       to skip the first 4 bytes.
+
+      We need to keep track of the address tree root nodes because `p_candidates_le` and
+      `p_candidates_be` may be updated if current architecture is ARCH_32.
     */
     s_candidates_le = p_candidates_le;
     s_candidates_be = p_candidates_be;
@@ -1551,6 +1554,7 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
         p_zap = p_zap->subs[msb_be];
     }
 
+    /* Free address tree nodes. */
     addrtree_node_free(s_candidates_le);
     addrtree_node_free(s_candidates_be);
 
