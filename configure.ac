@@ -11,7 +11,7 @@ AC_CHECK_LIB([m], [log2])
 AC_CHECK_LIB([pthread], [pthread_create])
 
 # Checks for header files.
-AC_CHECK_HEADERS([stdint.h stdlib.h string.h sys/ioctl.h unistd.h])
+AC_CHECK_HEADERS([stdint.h stdlib.h string.h sys/ioctl.h unistd.h byteswap.h sys/endian.h machine/endian.h sys/byteorder.h sys/isa_defs.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_UINT32_T

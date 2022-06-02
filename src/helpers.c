@@ -75,11 +75,11 @@ uint64_t read_pointer(arch_t arch, endianness_t endian, unsigned char *p_content
     {
         if (arch == ARCH_32)
         {
-            v = (uint64_t)(bswap_32((uint32_t)v));
+            v = (uint64_t)(BSWAP32((uint32_t)v));
         }
         else
         {
-            v = bswap_64(v);
+            v = BSWAP64(v);
         }
     }
 
