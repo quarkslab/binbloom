@@ -1426,7 +1426,7 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
     uint64_t be_ptr_base;
     int max_votes;
     uint64_t address,mask, address_be;
-    addrtree_node_t *p_candidates_le, *p_candidates_be, *p_zap;
+    addrtree_node_t *p_candidates_le, *p_candidates_be, *s_candidates_le, *s_candidates_be, *p_zap;
 
     /* Compute MSB mask. */
     nbits = log10(g_content_size)/log10(2);
@@ -1468,6 +1468,8 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
       If arch is ARCH_32, addresses are stored on the last 4 bytes, so we need
       to skip the first 4 bytes.
     */
+    s_candidates_le = p_candidates_le;
+    s_candidates_be = p_candidates_be;
 
     if (g_target_arch == ARCH_32)
     {
@@ -1548,6 +1550,9 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
         be_ptr_base = (be_ptr_base << 8) | msb_be;
         p_zap = p_zap->subs[msb_be];
     }
+
+    addrtree_node_free(s_candidates_le);
+    addrtree_node_free(s_candidates_be);
 
 
     /* Deduce the architecture. */
