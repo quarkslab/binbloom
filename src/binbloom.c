@@ -1617,6 +1617,11 @@ void find_base_address(char *psz_filename)
 
         /* Get file size. */
         g_content_size = ftell(f_file);
+        if (g_content_size < 1000)
+        {
+            error("Cannot evaluate file less than 1000 bytes in length!\n");
+            exit(-1);
+        }
 
         /* Go back to the beginning of this file. */
         fseek(f_file, 0, SEEK_SET);
