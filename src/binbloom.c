@@ -1434,6 +1434,7 @@ void compute_candidates(
 
 endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer_mask)
 {
+    endianness_t endian = ENDIAN_UNKNOWN;
     unsigned int i;
     int chunk_size;
     int nbits,max_le,max_be,n,m,j;
@@ -1456,12 +1457,16 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
     /* Parse the firmware. */
     p_candidates_le = addrtree_node_alloc();
     p_candidates_be = addrtree_node_alloc();
+    addrtree_register_address(p_candidates_le, 0);
+    addrtree_register_address(p_candidates_be, 0);
+
     for (i=0; i<g_content_size - get_arch_pointer_size(g_target_arch); i++)
     {
         if (i % chunk_size == 0)
         {
             progress_bar(i, (g_content_size - get_arch_pointer_size(g_target_arch)), "Guessing endianness ...");
         }
+
         /* Read LE and BE address from firmware at offset i. */
         address = read_pointer(g_target_arch, ENDIAN_LE, gp_content, i);
         address_be = read_pointer(g_target_arch, ENDIAN_BE, gp_content, i);
@@ -1497,14 +1502,12 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
 
     if (g_target_arch == ARCH_32)
     {
-        //printf("Skip 4 items\r\n");
         for (i=0;i<4;i++)
         {
             p_candidates_le = p_candidates_le->subs[0];
             p_candidates_be = p_candidates_be->subs[0];
         }
     }
-
 
     /* Compute max counts for LE and BE. */
     max_le = 0;
@@ -1575,10 +1578,6 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
         p_zap = p_zap->subs[msb_be];
     }
 
-    /* Free address tree nodes. */
-    addrtree_node_free(s_candidates_le);
-    addrtree_node_free(s_candidates_be);
-
 
     /* Deduce the architecture. */
     if (max_be>max_le)
@@ -1591,7 +1590,7 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
         else
             debug("Pointer base: %016lx\n", *u64_pointer_base);
 
-        return ENDIAN_BE;
+        endian = ENDIAN_BE;
     }
     else
     {
@@ -1603,8 +1602,15 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
         else
             debug("Pointer base: %016lx\n", *u64_pointer_base);
 
-        return ENDIAN_LE;
+        endian = ENDIAN_LE;
     }
+
+    /* Free address tree nodes. */
+    addrtree_node_free(s_candidates_le);
+    addrtree_node_free(s_candidates_be);
+
+    /* Return endianness. */
+    return endian;
 }
 
 
