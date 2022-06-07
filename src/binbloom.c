@@ -51,6 +51,7 @@ arch_t g_target_arch;
 endianness_t g_target_endian;
 unsigned char *gp_content;
 unsigned int g_content_size;
+unsigned int g_chunk_size;
 
 /* Globals used by find_base_address(). */
 base_address_candidate *gp_ba_candidates;
@@ -88,6 +89,20 @@ pthread_mutex_t deep_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
 /**
+ * @brief   Compute chunk size (used to optimize progress bar update)
+ **/
+void compute_chunk_size(void)
+{
+    if (g_content_size > 0)
+    {
+        g_chunk_size = g_content_size/1000;
+	if (g_chunk_size == 0)
+            g_chunk_size = 100;
+    }
+}
+
+
+/**
  * @brief   Find text strings and add them into a given list of point of interests.
  * @param   p_poi_list        pointer to a list of point of interests
  * @param   ui_min_str_size   minimum size of strings
@@ -109,7 +124,7 @@ void index_poi_strings(poi_t *p_poi_list, unsigned int ui_min_size)
 
     while (cursor < g_content_size)
     {
-        if (cursor % (g_content_size/1000) == 0)
+        if (cursor % g_chunk_size == 0)
         {
             progress_bar(cursor, g_content_size, "Indexing strings ...");
         }
@@ -830,7 +845,7 @@ void index_poi(poi_t *p_poi_list, int include_strings)
 
     while (cursor < g_content_size-get_arch_pointer_size(g_target_arch))
     {
-        if (cursor % (g_content_size/1000) == 0)
+        if (cursor % g_chunk_size == 0)
         {
             progress_bar(cursor, g_content_size-get_arch_pointer_size(g_target_arch), "Searching for PoIs...");
         }
@@ -1420,6 +1435,7 @@ void compute_candidates(
 endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer_mask)
 {
     unsigned int i;
+    int chunk_size;
     int nbits,max_le,max_be,n,m,j;
     int msb_le = 0, msb_be = 0;
     uint64_t le_ptr_base;
@@ -1427,6 +1443,11 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
     int max_votes;
     uint64_t address,mask, address_be;
     addrtree_node_t *p_candidates_le, *p_candidates_be, *s_candidates_le, *s_candidates_be, *p_zap;
+
+    /* Compute chunk size (used to update progress bar). */
+    chunk_size = (g_content_size / 100);
+    if (chunk_size == 0)
+        chunk_size = 10;
 
     /* Compute MSB mask. */
     nbits = log10(g_content_size)/log10(2);
@@ -1437,7 +1458,7 @@ endianness_t detect_endianness(uint64_t *u64_pointer_base, uint64_t *u64_pointer
     p_candidates_be = addrtree_node_alloc();
     for (i=0; i<g_content_size - get_arch_pointer_size(g_target_arch); i++)
     {
-        if (i % (g_content_size/100) == 0)
+        if (i % chunk_size == 0)
         {
             progress_bar(i, (g_content_size - get_arch_pointer_size(g_target_arch)), "Guessing endianness ...");
         }
@@ -1618,6 +1639,9 @@ void find_base_address(char *psz_filename)
         /* Get file size. */
         g_content_size = ftell(f_file);
 
+	/* Determine file chunk size. */
+	compute_chunk_size();
+
         /* Go back to the beginning of this file. */
         fseek(f_file, 0, SEEK_SET);
 
@@ -1725,6 +1749,9 @@ void find_coherent_data(char *psz_filename, uint64_t u64_base_address)
 
         /* Get file size. */
         g_content_size = ftell(f_file);
+
+	/* Determine chunk size. */
+	compute_chunk_size();
 
         /* Go back to the beginning of this file. */
         fseek(f_file, 0, SEEK_SET);
