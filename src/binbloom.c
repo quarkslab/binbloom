@@ -1893,7 +1893,7 @@ void print_usage(char *program_name)
     printf("Quarkslab's Binbloom - Raw firmware analysis tool\n\n");
     printf("Binbloom searches for endianness, base addresses and UDS structures from raw firmware files.\n\n");
     printf(" Usage: %s [options] firmware_file\n", program_name);
-    printf("\t-a (--arch)\t\tSpecify target architecture, must be 32 or 64 (default: 64).\n");
+    printf("\t-a (--arch)\t\tSpecify target architecture, must be 32 or 64 (default: 32).\n");
     printf("\t-b (--base)\t\tSpecify base address to use for UDS structures search (optional).\n");
     printf("\t-e (-endian)\t\tSpecify the endianness of the provided file, must be 'le' (little endian) or 'be' (big endian) (optional).\n");
     printf("\t-d (--deep)\t\tEnable deep search (very slow)\n");
