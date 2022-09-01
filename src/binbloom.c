@@ -1137,7 +1137,7 @@ void compute_candidates(
                 /* Add heuristic because pointer should be aligned on 4bytes/8bytes 
                  * if v % get_arch_pointer_size(arch) != 0 --> not aligned 
                  * */
-                if ((v&0x00000fff) == (poi->offset&0x000000000000fff) && 
+                if ((v&0x000000ff) == (poi->offset&0x0000000000000ff) && 
                     !is_ascii_ptr(v, g_target_arch) && 
                     is_ptr_aligned(v,g_target_arch))
                 {
@@ -1149,7 +1149,7 @@ void compute_candidates(
                         {
                             delta = (v - poi->offset);
 
-                            freespace = ( ((g_target_arch==ARCH_32)?0xffffffff:0xffffffffffffffff) - delta) + 1;
+                            freespace = ( ((g_target_arch==ARCH_32)?0x7fffffff:0x7fffffffffffffff) - delta) + 1;
                             if (freespace >= g_content_size)
                             {
                                 /* register candidate. */
