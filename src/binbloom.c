@@ -63,6 +63,10 @@ addrtree_node_t *g_candidates=NULL;
 uint64_t g_ptr_base;
 uint64_t g_ptr_mask;
 
+/* Memory alignment for candidates. */
+uint64_t g_mem_alignment = 0x1000;
+uint64_t g_mem_alignment_mask;
+
 
 /* Globals used by find_best_match() */
 uint64_t g_bm_address;
@@ -1137,7 +1141,7 @@ void compute_candidates(
                 /* Add heuristic because pointer should be aligned on 4bytes/8bytes 
                  * if v % get_arch_pointer_size(arch) != 0 --> not aligned 
                  * */
-                if ((v&0x00000fff) == (poi->offset&0x000000000000fff) && 
+                if ((v & g_mem_alignment_mask) == (poi->offset & g_mem_alignment_mask) && 
                     !is_ascii_ptr(v, g_target_arch) && 
                     is_ptr_aligned(v,g_target_arch))
                 {
@@ -1903,7 +1907,8 @@ void print_usage(char *program_name)
     printf(" Usage: %s [options] firmware_file\n", program_name);
     printf("\t-a (--arch)\t\tSpecify target architecture, must be 32 or 64 (default: 32).\n");
     printf("\t-b (--base)\t\tSpecify base address to use for UDS structures search (optional).\n");
-    printf("\t-e (-endian)\t\tSpecify the endianness of the provided file, must be 'le' (little endian) or 'be' (big endian) (optional).\n");
+    printf("\t-e (--endian)\t\tSpecify the endianness of the provided file, must be 'le' (little endian) or 'be' (big endian) (optional).\n");
+    printf("\t-m (--align)\t\tSpecify base address alignment (default: 0x1000).\n");
     printf("\t-d (--deep)\t\tEnable deep search (very slow)\n");
     printf("\t-t (--threads)\t\tNumber of threads to use (default: 1)\n");
     printf("\t-v (--verbose)\t\tEnable verbose mode.\n");
@@ -1934,8 +1939,12 @@ int main(int argc, char **argv)
     
     g_target_arch = ARCH_32;
     g_target_endian = ENDIAN_UNKNOWN;
+    g_mem_alignment_mask = g_mem_alignment - 1;
 
     static struct option long_options[] = {
+        {
+            "align", required_argument, 0, 'm'
+        },
         {
             "arch", required_argument, 0, 'a'
         },
@@ -1967,7 +1976,7 @@ int main(int argc, char **argv)
 
     while (1)
     {
-        opt = getopt_long(argc, argv, "a:b:me:t:f:vdh", long_options, &option_index);
+        opt = getopt_long(argc, argv, "a:b:m:e:t:f:vdh", long_options, &option_index);
         if (opt == -1)
             break;
 
@@ -2071,6 +2080,24 @@ int main(int argc, char **argv)
             case 'l': 
                 {
                   ptr_aligned = 1;
+                }
+                break;
+
+            case 'm':
+                {
+                    /* Handle Hex and decimal values. */
+                    if ((strlen(optarg) >= 2) && (!strncmp(optarg, "0x", 2) || !strncmp(optarg, "0X", 2)))
+                    {
+                        g_mem_alignment = strtol(optarg, NULL, 16);
+                    }
+                    else
+                    {
+                        g_mem_alignment = atoi(optarg);
+                    }
+
+                    g_mem_alignment_mask = g_mem_alignment - 1;
+                    printf("[i] Selected memory alignment: 0x%016lx\n", g_mem_alignment);
+                    printf("[i] Memory alignment mask is : 0x%016lx\n", g_mem_alignment_mask);
                 }
                 break;
 

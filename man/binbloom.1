@@ -42,6 +42,10 @@ search.
 Specify target endianness,  must be \fIle\fP for little-endian or \fIbe\fP for big-endian.
 
 .TP
+\fB-m\fP \fIalignment\fP, \fB--align=\fP\fIalignment\fP
+Specify base address alignment, default is 0x1000.
+
+.TP
 \fB-d\fP, \fB--deep\fP
 Enable \fBdeep search\fP. This search mode will consider each potential loading/base address
 without applying a first heuristic filter used in normal mode. This type
