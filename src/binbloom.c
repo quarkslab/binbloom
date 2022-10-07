@@ -1645,68 +1645,76 @@ void find_base_address(char *psz_filename)
         /* Get file size. */
         g_content_size = ftell(f_file);
 
-	/* Determine file chunk size. */
-	compute_chunk_size();
-
-        /* Go back to the beginning of this file. */
-        fseek(f_file, 0, SEEK_SET);
-
-        /* Allocate enough memory to store content. */
-        gp_content = (unsigned char *)malloc(g_content_size);
-        if (gp_content == NULL)
+        /* File size must be at least the size of the target architecture's pointer size. */
+        if (g_content_size >= get_arch_pointer_size(g_target_arch))
         {
-            printf("[!] Cannot allocate memory for file %s (%d bytes is too large)\r\n", psz_filename, g_content_size);
-        }
-        else
-        {
-            /* Read file content. */
-            fread(gp_content, g_content_size, 1, f_file);
-            printf("[i] File read (%d bytes)\r\n", g_content_size);
+            /* Determine file chunk size. */
+            compute_chunk_size();
 
-            /* Analyze entropy. */
-            memory_analyze(gp_content, g_content_size, "default");
+            /* Go back to the beginning of this file. */
+            fseek(f_file, 0, SEEK_SET);
 
-            if (g_target_endian != ENDIAN_UNKNOWN)
-            { 
-                /* Detect endianness, pointer base and mask. */
-                //detect_endianness(arch, p_file_content, ui_file_size, &g_ptr_base, &g_ptr_mask);
-
-                /* Force endianness. */
-                g_target_endian = g_target_endian;
+            /* Allocate enough memory to store content. */
+            gp_content = (unsigned char *)malloc(g_content_size);
+            if (gp_content == NULL)
+            {
+                printf("[!] Cannot allocate memory for file %s (%d bytes is too large)\r\n", psz_filename, g_content_size);
             }
             else
             {
-                /* Endianness is unknown, try to guess it. */
-                g_target_endian = detect_endianness(&g_ptr_base, &g_ptr_mask);
-            }
+                /* Read file content. */
+                fread(gp_content, g_content_size, 1, f_file);
+                printf("[i] File read (%d bytes)\r\n", g_content_size);
 
-            if (g_target_endian != ENDIAN_UNKNOWN)
-            {
-                printf("[i] Endianness is %s\r\n", (g_target_endian==ENDIAN_LE)?"LE":"BE");
-                
-                if (g_symbols_list == NULL)
-                {
-                    /* Search points of interest. */
-                    index_poi(&g_poi_list, 1);
+                /* Analyze entropy. */
+                memory_analyze(gp_content, g_content_size, "default");
 
-                    index_functions(&g_poi_list);
+                if (g_target_endian != ENDIAN_UNKNOWN)
+                { 
+                    /* Detect endianness, pointer base and mask. */
+                    //detect_endianness(arch, p_file_content, ui_file_size, &g_ptr_base, &g_ptr_mask);
 
-                    g_candidates = addrtree_node_alloc();
-                    compute_candidates(&g_poi_list, g_candidates);
+                    /* Force endianness. */
+                    g_target_endian = g_target_endian;
                 }
                 else
                 {
-                    /* Index strings. */
-                    index_poi(g_symbols_list, 1);
+                    /* Endianness is unknown, try to guess it. */
+                    g_target_endian = detect_endianness(&g_ptr_base, &g_ptr_mask);
+                }
 
-                    g_candidates = addrtree_node_alloc();
-                    compute_candidates(g_symbols_list, g_candidates);
-                }                
+                if (g_target_endian != ENDIAN_UNKNOWN)
+                {
+                    printf("[i] Endianness is %s\r\n", (g_target_endian==ENDIAN_LE)?"LE":"BE");
+                    
+                    if (g_symbols_list == NULL)
+                    {
+                        /* Search points of interest. */
+                        index_poi(&g_poi_list, 1);
+
+                        index_functions(&g_poi_list);
+
+                        g_candidates = addrtree_node_alloc();
+                        compute_candidates(&g_poi_list, g_candidates);
+                    }
+                    else
+                    {
+                        /* Index strings. */
+                        index_poi(g_symbols_list, 1);
+
+                        g_candidates = addrtree_node_alloc();
+                        compute_candidates(g_symbols_list, g_candidates);
+                    }                
+                }
+                else
+                {
+                    printf("[!] Unable to detect endianness :X\r\n");
+                }
             }
-            else
-            {
-                printf("[!] Unable to detect endianness :X\r\n");
-            }
+        }
+        else
+        {
+            printf("[!] Input file must be at least %d bytes.\r\n", get_arch_pointer_size(g_target_arch));
         }
     }
 }
