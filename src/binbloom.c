@@ -239,7 +239,7 @@ void index_poi_pointers(poi_t *p_poi_list, uint64_t u64_base_address)
 /**
  * @brief   Find arrays of pointers in the provided firmware file
  *
- * This function search for arrays of successive pointers identified in a list
+ * This function searches for arrays of successive pointers identified in a list
  * of point of interests.
  *
  * @param   p_pointer_arrays_list       pointer to a list of arrays of interest
