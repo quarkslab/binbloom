@@ -15,6 +15,10 @@
 #include "log.h"
 #include "functions.h"
 
+#define	VER_MAJOR	2
+#define VER_MINOR	1
+#define VER_REV		0
+
 uint8_t ptr_aligned=0;
 
 /* Base address candidate structure. */
@@ -1902,7 +1906,7 @@ void find_coherent_data(char *psz_filename, uint64_t u64_base_address)
 
 void print_usage(char *program_name)
 {
-    printf("Quarkslab's Binbloom - Raw firmware analysis tool\n\n");
+    printf("Quarkslab's Binbloom - Raw firmware analysis tool - version %d.%d.%d\n\n", VER_MAJOR, VER_MINOR, VER_REV);
     printf("Binbloom searches for endianness, base addresses and UDS structures from raw firmware files.\n\n");
     printf(" Usage: %s [options] firmware_file\n", program_name);
     printf("\t-a (--arch)\t\tSpecify target architecture, must be 32 or 64 (default: 32).\n");
